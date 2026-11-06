@@ -96,7 +96,7 @@ async function saveConfiguration(input) {
     autoSync: Boolean(input.autoSync)
   };
   if (!await chrome.permissions.contains({ origins: [connectionPermission(config.apiUrl)] })) {
-    throw new Error('请授权扩展连接本机 GFlow');
+    throw new Error('请授权扩展连接所配置的 GFlow 地址');
   }
   await chrome.storage.local.set({ config });
   await restoreAlarm();
@@ -216,7 +216,7 @@ async function executeSync() {
       rawCookies = groups.flat();
     }
     const googleCookies = observed?.cookieHeader || serializeFlowCookies(rawCookies);
-    await Logger.info('Cookie 提取成功，正在提交至本机 GFlow 内核...');
+    await Logger.info('Cookie 提取成功，正在提交至配置的 GFlow 内核...');
 
     const payload = {
       login_account: loginAccount,
@@ -244,7 +244,7 @@ async function executeSync() {
         signal: controller.signal
       });
     } catch (error) {
-      const errText = error.name === 'AbortError' ? 'GFlow 同步超时，请检查代理设置后重试' : '无法连接本机 GFlow，请确认 EasyCPA 内核运行中';
+      const errText = error.name === 'AbortError' ? 'GFlow 同步超时，请检查代理设置后重试' : '无法连接配置的 GFlow 地址，请检查服务器状态和浏览器站点权限';
       await Logger.error(errText);
       throw new Error(errText);
     } finally {

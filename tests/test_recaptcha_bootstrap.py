@@ -7,10 +7,35 @@ from pathlib import Path
 import shutil
 import subprocess
 import unittest
+from urllib.parse import urlparse
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 ROOT=Path(__file__).resolve().parents[1]
 class ScriptRegression(unittest.TestCase):
+    def test_bootstrap_surface_accepts_about_redirect(self):
+        source = ROOT / "python/flow2api/src/services/browser_captcha_personal.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        cls = next(node for node in tree.body if isinstance(node, ast.ClassDef)
+                   and node.name == "BrowserCaptchaService")
+        method = next(node for node in cls.body if isinstance(node, ast.FunctionDef)
+                      and node.name == "_is_labs_bootstrap_url")
+        method.decorator_list = []
+        namespace = {"urlparse": urlparse}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                     str(source), "exec"), namespace)
+        predicate = namespace["_is_labs_bootstrap_url"]
+        self.assertTrue(predicate("https://flow.google.com/about"))
+        self.assertTrue(predicate("https://flow.google.com/about/"))
+        self.assertTrue(predicate("https://flow.google.com/about?source=redirect"))
+        self.assertTrue(predicate("https://flow.google.com/"))
+        self.assertTrue(predicate("https://flow.google.com/projects"))
+        self.assertTrue(predicate("https://flow.google.com/project/synthetic"))
+        for url in ("", "https://evil.test/about", "https://flow.google.com.evil.test/about",
+                    "https://flow.google.com/about-unrelated", "https://flow.google.com/login"):
+            with self.subTest(url=url):
+                self.assertFalse(predicate(url))
+
     def test_score_key_executes_without_rendering_the_document_root(self):
         import importlib.util
         source=ROOT/"python/flow2api/src/services/recaptcha_runtime.py"
@@ -89,5 +114,47 @@ assert.throws(()=>context.window.__flow2apiRecaptchaScriptPolicy.createScriptURL
 """
         command=harness.replace("SOURCE",json.dumps(captured[0]))
         subprocess.run([node,"-e",command],check=True,capture_output=True,text=True)
+
+class BootstrapNavigationRegression(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        source = ROOT / "python/flow2api/src/services/browser_captcha_personal.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        cls = next(node for node in tree.body if isinstance(node, ast.ClassDef)
+                   and node.name == "BrowserCaptchaService")
+        methods = [node for node in cls.body
+                   if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                   and node.name in {"_is_labs_bootstrap_url", "_open_labs_bootstrap_page"}]
+        subject = ast.ClassDef(name="Subject", bases=[], keywords=[], body=methods, decorator_list=[])
+        namespace = {
+            "urlparse": urlparse,
+            "PERSONAL_LABS_BOOTSTRAP_URL": "https://flow.google.com/projects",
+            "debug_logger": SimpleNamespace(log_info=lambda *args: None, log_warning=lambda *args: None),
+        }
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[subject], type_ignores=[])),
+                     str(source), "exec"), namespace)
+        self.service = namespace["Subject"]()
+        self.service._navigation_timeout_seconds = 1
+        self.service._tab_get = AsyncMock()
+        self.service._wait_for_document_ready = AsyncMock(return_value=True)
+        self.service._tab_evaluate = AsyncMock(side_effect=["https://flow.google.com/about", "complete"])
+        self.service._is_browser_runtime_error = lambda error: False
+
+    async def test_redirected_about_page_completes_bootstrap(self):
+        self.assertTrue(await self.service._open_labs_bootstrap_page(None, label="regression"))
+        self.service._tab_get.assert_awaited_once()
+
+    async def test_navigation_timeout_accepts_ready_about_page(self):
+        self.service._tab_get.side_effect = TimeoutError("synthetic navigation timeout")
+        self.assertTrue(await self.service._open_labs_bootstrap_page(None, label="regression"))
+        self.service._wait_for_document_ready.assert_not_awaited()
+
+    async def test_document_wait_timeout_accepts_ready_about_page(self):
+        self.service._wait_for_document_ready.return_value = False
+        self.assertTrue(await self.service._open_labs_bootstrap_page(None, label="regression"))
+
+    async def test_unrelated_redirect_still_fails_bootstrap(self):
+        self.service._tab_evaluate.side_effect = ["https://accounts.google.com/login", "complete"]
+        self.assertFalse(await self.service._open_labs_bootstrap_page(None, label="regression"))
+
 
 if __name__=="__main__": unittest.main()

@@ -19,7 +19,7 @@ hiddenimports += [
     for entry in distribution("tomli").files or []
     if "__mypyc." in Path(entry).name
 ]
-for package in ("curl_cffi", "nodriver", "playwright", "aiosqlite", "bcrypt", "psutil", "tomli"):
+for package in ("curl_cffi", "nodriver", "playwright", "aiosqlite", "bcrypt", "psutil", "tomli", "deprecated", "websockets"):
     package_data, package_binaries, package_imports = collect_all(package)
     datas += package_data
     binaries += package_binaries
