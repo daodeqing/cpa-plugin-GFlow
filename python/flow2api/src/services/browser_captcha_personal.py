@@ -7699,7 +7699,7 @@ class BrowserCaptchaService:
         host = str(parsed.netloc or "").strip().lower()
         path = str(parsed.path or "").strip()
         return host == "flow.google.com" and (
-            path.rstrip("/") == "/projects" or path.startswith("/project/")
+            path.rstrip("/") in {"/projects", "/about", ""} or path.startswith("/project/")
         )
 
     async def _open_labs_bootstrap_page(self, tab, *, label: str) -> bool:

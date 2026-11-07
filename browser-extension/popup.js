@@ -41,7 +41,8 @@ function parseAndFillConfig(rawText) {
     field('connectionToken').value = connection.connectionToken;
     if (email) field('email').value = email;
     return true;
-  } catch (_) {
+  } catch (err) {
+    showStatus(err instanceof SyntaxError ? '未能解析配置 JSON，请确认是从 GFlow 页面点击【复制扩展配置】所得。' : err.message, 'error');
     return false;
   }
 }
@@ -62,7 +63,7 @@ function renderState(state) {
     const timeStr = Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString();
     showStatus(`${succeeded ? '同步成功' : '同步失败'} (${timeStr})\n${state.lastSync.message || ''}`, succeeded ? 'success' : 'error');
   } else if (isPaired) {
-    showStatus('已配置本机连接，登录 Flow 后点击“保存并立即同步”。', 'info');
+    showStatus('已配置 GFlow 连接，登录 Flow 后点击“保存并立即同步”。', 'info');
   } else {
     showStatus('请从 GFlow 页面点击“复制扩展配置”，粘贴到此处即可。', 'info');
   }
@@ -77,7 +78,7 @@ async function saveFromForm() {
   if (connectionToken) {
     connection = validateConnection({ product: 'GFlow', apiUrl, connectionToken });
     const granted = await chrome.permissions.request({ origins: [connectionPermission(connection.apiUrl)] });
-    if (!granted) throw new Error('需要授权扩展连接本机 GFlow');
+    if (!granted) throw new Error('需要授权扩展连接所配置的 GFlow 地址');
   } else if (!paired || apiUrl !== savedApiUrl) {
     throw new Error('请从 GFlow 复制扩展配置并粘贴到快捷导入框');
   }
@@ -101,8 +102,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (parseAndFillConfig(val)) {
       field('quickPaste').value = '';
       showStatus('配置已自动填入，请核对邮箱后点击“保存并立即同步”。', 'success');
-    } else {
-      showStatus('未能解析配置 JSON，请确认是从 GFlow 页面点击【复制扩展配置】所得。', 'error');
     }
   });
 

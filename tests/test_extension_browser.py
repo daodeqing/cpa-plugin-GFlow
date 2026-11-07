@@ -11,6 +11,8 @@ const vm = require('node:vm'), assert = require('node:assert/strict');
 const saved = {};
 const listeners = {};
 let uploads = 0, responseStatus = 200, responseBody = {success:true, action:"updated"}, cookieReads = 0;
+let expectedUrl = 'http://127.0.0.1:8317/v0/management/plugins/gflow/api/extension-sync';
+const allowedOrigins = new Set(['http://127.0.0.1/*']);
 const store = {
   async get(keys) { const result = {}; for (const key of Array.isArray(keys) ? keys : [keys]) result[key] = saved[key]; return result; },
   async set(values) { Object.assign(saved, structuredClone(values)); },
@@ -21,7 +23,7 @@ const context = vm.createContext({
   URL, AbortController, setTimeout, clearTimeout, console,
   chrome: {
     storage: { local: store },
-    permissions: { async contains(request) { assert.equal(request.origins[0], 'http://127.0.0.1/*'); return true; } },
+    permissions: { async contains(request) { return allowedOrigins.has(request.origins[0]); } },
     alarms: { async clear() {}, async create() {}, onAlarm: listener('alarm') },
     runtime: { id: 'gflow-test', onMessage: listener('message'), onStartup: listener('startup'), onInstalled: listener('installed') },
     action: { async setBadgeText() {}, async setBadgeBackgroundColor() {} },
@@ -39,7 +41,7 @@ const context = vm.createContext({
   },
   fetch: async (url, options) => {
     uploads++;
-    assert.equal(url, 'http://127.0.0.1:8317/v0/management/plugins/gflow/api/extension-sync');
+    assert.equal(url, expectedUrl);
     assert.equal(options.method, 'POST');
     assert.equal(options.headers.Authorization, 'Bearer fake-management');
     assert.equal(options.redirect, 'error');
@@ -55,10 +57,21 @@ vm.runInContext(COMMON, context);
 vm.runInContext(BACKGROUND, context);
 (async () => {
   const connection = {product:'GFlow', apiUrl:'http://127.0.0.1:8317/v0/management/plugins/gflow/api/extension-sync', connectionToken:'fake-management'};
-  for (const apiUrl of ['https://evil.test/v0/management/plugins/gflow/api/extension-sync','http://127.0.0.1:8317/v8/management/config','http://127.0.0.1:8317/v0/management/plugins/gflow/api/extension-sync?secret=x']) {
+  for (const apiUrl of ['http://evil.test/v0/management/plugins/gflow/api/extension-sync','http://127.0.0.1:8317/v8/management/config','http://127.0.0.1:8317/v0/management/plugins/gflow/api/extension-sync?secret=x']) {
     assert.throws(() => context.validateConnection({...connection,apiUrl}));
   }
-  console.log('PASS remote destinations and unrelated management routes rejected');
+  const remote = context.validateConnection({...connection,apiUrl:'https://cpa.example.com/v0/management/plugins/gflow/api/extension-sync'});
+  assert.equal(remote.apiUrl,'https://cpa.example.com/v0/management/plugins/gflow/api/extension-sync');
+  assert.equal(context.connectionPermission(remote.apiUrl),'https://cpa.example.com/*');
+  for (const apiUrl of [
+    'https://user:secret@cpa.example.com/v0/management/plugins/gflow/api/extension-sync',
+    'https://cpa.example.com/v0/management/plugins/gflow/api/extension-sync?token=secret',
+    'https://cpa.example.com/v0/management/plugins/gflow/api/extension-sync#fragment',
+    'https://cpa.example.com/v0/management/config',
+    'file:///v0/management/plugins/gflow/api/extension-sync'
+  ]) assert.throws(() => context.validateConnection({...connection,apiUrl}));
+  console.log('PASS remote HTTPS destinations are accepted and scoped to one host');
+  console.log('PASS remote HTTP destinations and unrelated management routes rejected');
   await context.saveConfiguration({connection,loginAccount:'Example@example.test',autoSync:true});
   const publicState = await context.publicState();
   assert.equal(publicState.configured,true);
@@ -98,6 +111,19 @@ vm.runInContext(BACKGROUND, context);
   assert.ok(!JSON.stringify(saved.logs).includes('example@example.test'));
   assert.equal(listeners.message({action:'sync'},{id:'another-extension'},()=>{}),false);
   console.log('PASS messages from other extensions are ignored');
+  const previousUploads = uploads, previousReads = cookieReads;
+  await assert.rejects(context.saveConfiguration({connection:remote,loginAccount:'Example@example.test',autoSync:true}), /请授权/);
+  assert.equal(uploads,previousUploads);
+  assert.equal(cookieReads,previousReads);
+  assert.equal((await context.publicState()).apiUrl,connection.apiUrl);
+  allowedOrigins.add('https://cpa.example.com/*');
+  await context.saveConfiguration({connection:remote,loginAccount:'Example@example.test',autoSync:true});
+  expectedUrl = remote.apiUrl;
+  responseStatus = 200;
+  responseBody = {success:true,action:'updated'};
+  assert.equal((await context.syncNow()).success,true);
+  assert.equal(uploads,previousUploads+1);
+  console.log('PASS remote sync requires site permission and preserves local setup on denial');
 })().catch(error => { console.error(error); process.exitCode=1; });
 """
 
@@ -111,7 +137,7 @@ class ExtensionBrowserTest(unittest.TestCase):
         script = "const COMMON = " + json.dumps(common) + "; const BACKGROUND = " + json.dumps(background) + ";\n" + HARNESS
         result = subprocess.run([node, "-"], input=script, text=True, capture_output=True, encoding="utf-8", timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(result.stdout.count("PASS "), 6, result.stdout)
+        self.assertEqual(result.stdout.count("PASS "), 8, result.stdout)
         print(result.stdout, end="")
 
 

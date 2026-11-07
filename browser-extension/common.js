@@ -11,9 +11,13 @@ function validateConnection(value) {
   } catch (_) {
     throw new Error('GFlow 连接地址无效');
   }
-  if (!['127.0.0.1', 'localhost'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol)
+  const isLocal = ['127.0.0.1', 'localhost'].includes(url.hostname);
+  if (!['http:', 'https:'].includes(url.protocol)
       || url.username || url.password || url.search || url.hash || url.pathname !== GFLOW_SYNC_PATH) {
-    throw new Error('扩展仅连接本机 GFlow；请重新复制配置');
+    throw new Error('GFlow 连接地址无效，请重新复制扩展配置');
+  }
+  if (!isLocal && url.protocol !== 'https:') {
+    throw new Error('远程 GFlow 必须使用 HTTPS 地址，请通过 HTTPS 管理页面重新复制配置');
   }
   const connectionToken = String(value.connectionToken || '').trim();
   if (!connectionToken || connectionToken.length > 512 || /[\x00-\x1f\x7f]/.test(connectionToken)) {

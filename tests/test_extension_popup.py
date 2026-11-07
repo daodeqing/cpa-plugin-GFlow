@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HARNESS = r"""
 const assert = require('node:assert/strict'), vm = require('node:vm');
 const fields = new Map(), events = new Map(), calls = [];
-let mode = 'rejected', permission = true;
+let mode = 'rejected', permission = true, permissionRequest;
 function field(id) {
   if (!fields.has(id)) fields.set(id, {value:'', checked:true, disabled:false, required:true,
     className:'', textContent:'', addEventListener(name, fn) { this[name] = fn; }});
@@ -19,7 +19,7 @@ const state = {configured:true,apiUrl:'http://127.0.0.1:8317/v0/management/plugi
 const context = vm.createContext({URL, console, confirm:()=>true,
   document:{getElementById:field,addEventListener(name, fn){events.set(name,fn);}},
   window:{location:{}},
-  chrome:{permissions:{async request(){return permission;}}, runtime:{async sendMessage(req){
+  chrome:{permissions:{async request(request){permissionRequest=request;return permission;}}, runtime:{async sendMessage(req){
     calls.push(req);
     if (req.action === 'state' || req.action === 'save') return {ok:true,result:state};
     if (req.action === 'sync') {
@@ -60,6 +60,26 @@ async function submit() { await field('setup').submit({preventDefault(){}}); }
   await submit();
   assert.match(field('status').textContent,/需要授权/);
   assert.equal(calls.filter(call=>call.action==='sync').length,syncCalls);
+  const remote = {product:'GFlow',apiUrl:'https://cpa.example.com/v0/management/plugins/gflow/api/extension-sync',connectionToken:'synthetic-key'};
+  field('quickPaste').value=JSON.stringify({...remote,apiUrl:remote.apiUrl.replace('https:','http:')});
+  field('quickFillBtn').click();
+  assert.match(field('status').textContent,/远程 GFlow 必须使用 HTTPS/);
+  assert.ok(!field('status').textContent.includes('解析配置 JSON'));
+  field('quickPaste').value='{invalid';
+  field('quickFillBtn').click();
+  assert.match(field('status').textContent,/解析配置 JSON/);
+  field('quickPaste').value=JSON.stringify(remote);
+  field('quickFillBtn').click();
+  assert.equal(field('apiUrl').value,remote.apiUrl);
+  assert.equal(field('quickPaste').value,'');
+  const previousSaves=calls.filter(call=>call.action==='save').length;
+  await submit();
+  assert.equal(calls.filter(call=>call.action==='save').length,previousSaves);
+  assert.equal(permissionRequest.origins[0],'https://cpa.example.com/*');
+  permission=true;
+  await submit();
+  assert.equal(calls.filter(call=>call.action==='save').at(-1).config.connection.apiUrl,remote.apiUrl);
+  assert.equal(field('status').className,'status-banner success');
   console.log('PASS popup failure, true success, saved pairing, denied permission and reload state');
 })().catch(error=>{console.error(error);process.exitCode=1;});
 """
