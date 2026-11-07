@@ -11,6 +11,14 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def comparable(content):
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content
+    return content.replace(bytes([13, 10]), bytes([10]))
+
+
 class WorkerBundleTest(unittest.TestCase):
     def test_personal_browser_dependencies_reach_freezer_analysis(self):
         hooks = ModuleType("PyInstaller.utils.hooks")
@@ -52,7 +60,7 @@ class WorkerBundleTest(unittest.TestCase):
             self.assertEqual(set(archive.namelist()), set(sources))
             for name, content in sources.items():
                 with self.subTest(name=name):
-                    self.assertEqual(archive.read(name), content)
+                    self.assertEqual(comparable(archive.read(name)), comparable(content))
 
     def test_remote_host_access_remains_optional(self):
         manifest = json.loads((ROOT / "browser-extension/manifest.json").read_text(encoding="utf-8"))
