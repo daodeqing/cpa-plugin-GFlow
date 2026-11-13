@@ -759,6 +759,7 @@ class TokenManager:
             # account credentials expired. Only explicit authentication failure
             # may persistently disable an account.
             auth_markers = (
+                "未返回已登录账号",  # zh-compat: pinned protocol_login.py logged-out verdict
                 "401", "UNAUTHENTICATED", "Google Cookie 已失效",  # zh-compat: pinned flow_frontend.py
                 "Flow 登录已失效", "Flow 登录认证失败", "Flow login expired",  # zh-compat: pinned browser_captcha.py and flow_frontend.py; English from browser_captcha_personal.py
             )
@@ -971,6 +972,7 @@ class TokenManager:
             return None
         if config.captcha_method not in {"personal", "browser"}:
             return None
+        protocol_error = latest.last_st_refresh_result if (token.google_cookies or "").strip() else None
         try:
             if config.captcha_method == "personal":
                 from .browser_captcha_personal import BrowserCaptchaService
@@ -984,6 +986,8 @@ class TokenManager:
             return await self._save_refreshed_cookies(token_id, token, result)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+            if protocol_error:
+                error = f"{protocol_error}; browser fallback: {error}"
             await self._record_cookie_refresh_failure(token, error)
             debug_logger.log_warning(f"[COOKIE_REFRESH] Token {token_id}: Browser refresh failed - {error}")
             return None
