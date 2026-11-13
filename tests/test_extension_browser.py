@@ -1,4 +1,4 @@
-"""模拟 Chrome 扩展 API，不安装扩展、不访问浏览器 Cookie。"""
+"""Mock Chrome extension APIs without installing the extension or accessing browser Cookies."""
 import json
 from pathlib import Path
 import shutil
@@ -75,17 +75,17 @@ vm.runInContext(BACKGROUND, context);
   responseStatus=401;
   const failure = await context.syncNow();
   assert.equal(failure.success,false);
-  assert.match(failure.message,/凭据失效/);
+  assert.match(failure.message,/credentials expired/);
   console.log('PASS rejected credentials produce a clear recovery instruction');
   responseStatus=422;
-  responseBody={success:false,error:{code:"gflow_google_auth_rejected",message:"Google 未接受当前登录态，请刷新 Flow 项目页后再同步。"}};
+  responseBody={success:false,error:{code:"gflow_google_auth_rejected",message:"Google rejected the current login session. Refresh the Flow project page before syncing."}};
   const rejected=await context.syncNow();
-  assert.match(rejected.message,/Google 未接受/);
+  assert.match(rejected.message,/Google rejected/);
   assert.match(rejected.message,/gflow_google_auth_rejected/);
   responseStatus=200;
   const oldBackend=await context.syncNow();
   assert.equal(oldBackend.success,false);
-  assert.match(oldBackend.message,/Google 未接受/);
+  assert.match(oldBackend.message,/Google rejected/);
   responseStatus=500;
   responseBody={error:{message:"Cookie=do-not-echo-access_token"}};
   const privateError=await context.syncNow();

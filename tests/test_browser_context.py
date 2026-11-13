@@ -1,4 +1,4 @@
-"""只使用虚构认证字段；不读取真实浏览器 Cookie。"""
+"""Use only fake authentication fields; do not read actual browser Cookies."""
 import json
 import shutil
 import subprocess

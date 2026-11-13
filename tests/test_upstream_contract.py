@@ -1,4 +1,4 @@
-"""使用虚构请求核对上游协议与插件边界，不调用 Google。"""
+"""Check upstream protocols and plugin boundaries with fake requests, without calling Google."""
 import hashlib
 import json
 import sys

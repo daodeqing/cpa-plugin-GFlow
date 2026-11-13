@@ -1,4 +1,4 @@
-"""查额与健康状态集成回归：模拟上游，不刷新会话或启动浏览器。"""
+"""Credit and health status integration regression tests with mocked upstream, without session refresh or browser startup."""
 import sys
 import time
 import unittest
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "python"), str(ROOT / "python/flow2api")]
-# worker 运行时把日志转 stderr；导入后恢复测试框架的 stdout。
+# worker redirects logs to stderr at runtime; restore the test framework stdout after import.
 _saved_stdout = sys.stdout
 try:
     from worker import GFlowService
@@ -71,7 +71,7 @@ class WorkerAccountsTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_rejected_session_does_not_report_zero_or_overwrite_balance(self):
         service, method = self.make_service(
-            error=RuntimeError("Flow 登录认证失败 (rpc=nzlxg, code=401)"))
+            error=RuntimeError("Flow 登录认证失败 (rpc=nzlxg, code=401)"))  # zh-compat: simulates pinned flow_frontend.py text
         service.token_manager._at_validation_cache[1] = time.monotonic() + 300
         result = await method(service, {"token_id": 1})
         self.assertFalse(result["success"])
@@ -109,7 +109,7 @@ class WorkerAccountsTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_status_and_token_list_follow_live_login_validation_evidence(self):
         service, method = self.make_service()
-        # 缓存余额与启用开关不能在状态 API 中伪装成已经验证。
+        # Cached balances and enabled switches must not imply verification in the status API.
         before = await service.handle_status({})
         self.assertEqual(before["enabled_tokens"], 1)
         self.assertEqual(before["verified_tokens"], 0)
@@ -117,14 +117,14 @@ class WorkerAccountsTest(unittest.IsolatedAsyncioTestCase):
         listing = await service.handle_list_tokens({})
         self.assertEqual(listing["tokens"][0]["health"]["code"], "unverified")
         self.assertNotIn("test@example.com", str(listing))
-        # 查额成功只验证登录额度接口，状态不承诺生成成功。
+        # A successful credits check verifies only the login credits API; status does not guarantee generation success.
         await method(service, {"token_id": 1})
         after = await service.handle_status({})
         self.assertEqual(after["verified_tokens"], 1)
         health = (await service.handle_list_tokens({}))["tokens"][0]["health"]
         self.assertEqual(health["code"], "verified")
-        self.assertIn("验证码", health["detail"])
-        # 最新网络错误清掉旧成功 TTL，账号仍启用，历史余额也保留。
+        self.assertIn("captcha", health["detail"])
+        # The latest network error clears the old successful TTL; keep the account enabled and retain its previous balance.
         service.flow_client.get_credits.side_effect = TimeoutError("synthetic timeout")
         await method(service, {"token_id": 1})
         failed = await service.handle_status({})

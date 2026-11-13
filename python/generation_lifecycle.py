@@ -1,4 +1,4 @@
-"""任务生命周期：超时、单项取消和浏览器回收，不自动重发生成。"""
+"""Task lifecycle: timeouts, individual cancellation, and browser cleanup without automatic generation resubmission."""
 import asyncio
 import json
 import secrets
@@ -19,7 +19,7 @@ async def close_browsers():
 
 
 class TaskPipe:
-    """请求专属 Windows 命名管道；取消不经过正在生成的 HTTP 处理器。"""
+    """Per-request Windows named pipe; cancellation bypasses the HTTP handler running generation."""
     def __init__(self, request_id, loop, task, active):
         self.handle = None
         self.closed = False
@@ -48,12 +48,12 @@ class TaskPipe:
                 count=wintypes.DWORD()
                 if not self.kernel.ReadFile(self.handle,buffer,64,ctypes.byref(count),None): return
                 if buffer.raw[:count.value].strip()!=b'cancel': return
-                # 先确认，随后取消本项任务；其他任务和用户浏览器不受影响。
+                # Acknowledge first, then cancel this task; other tasks and user browsers are unaffected.
                 reply=b'cancelled\n'
                 self.kernel.WriteFile(self.handle,reply,len(reply),ctypes.byref(count),None)
                 loop.call_soon_threadsafe(task.cancel)
-                # 某些浏览器启动调用会短暂阻塞事件循环。仅回收本 worker
-                # 创建、且带插件专用 profile 的 Chrome，以便让取消立即生效。
+                # Some browser startup calls briefly block the event loop. Clean up only Chrome instances
+                # created by this worker with a plugin-specific profile so cancellation takes effect immediately.
                 if not active.is_set(): return
                 import psutil
                 profile = os.environ.get('PERSONAL_BROWSER_USER_DATA_DIR', '').strip()
@@ -90,7 +90,7 @@ class GenerationLifecycle:
         self.controls = {}
 
     async def start(self):
-        # 临时控制端口仅绑定本机；每次请求使用不可猜测的能力令牌。
+        # Bind the temporary control port to localhost only; use an unguessable capability token per request.
         self.server = await asyncio.start_server(self.handle_control, '127.0.0.1', 0, limit=8192)
 
     async def handle_control(self, reader, writer):
@@ -166,7 +166,7 @@ class GenerationLifecycle:
                 port = self.server.sockets[0].getsockname()[1]
                 control = {'url': f'http://127.0.0.1:{port}/cancel', 'token': token}
                 self.service.send_line({'id': req_id, 'stream': True, 'chunk': 'data: ' + json.dumps({'gflow_control': control, 'choices': [{'delta': {'content': ''}}]}) + '\n\n'})
-            # 不让并发任务互相关闭浏览器。等待锁也能取消。
+            # Prevent concurrent tasks from closing each other's browsers. Lock waits are cancellable too.
             async with self.lock:
                 active.set()
                 try:
@@ -180,9 +180,9 @@ class GenerationLifecycle:
                     finally:
                         active.clear()
         except asyncio.TimeoutError:
-            self.fail(req_id, stream, 'generation_timeout', 'GFlow 生成超时，已停止浏览器重试；请检查 Google Flow 登录、网络和验证码状态')
+            self.fail(req_id, stream, 'generation_timeout', 'GFlow generation timed out and browser retries stopped; check Google Flow login, network, and captcha status')
         except asyncio.CancelledError:
-            self.fail(req_id, stream, 'cancelled', 'GFlow 已停止当前生成任务并回收专用浏览器；已提交的云端费用以平台为准')
+            self.fail(req_id, stream, 'cancelled', 'GFlow stopped this generation task and closed the dedicated browser; the platform determines charges for submitted cloud requests')
         except Exception as error:
             self.fail(req_id, stream, 'generation_error', str(error)[:400])
         finally:
