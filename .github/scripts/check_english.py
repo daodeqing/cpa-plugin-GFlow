@@ -45,19 +45,30 @@ def findings():
         if name in pinned or name in EXEMPT or not (ROOT / name).is_file():
             continue
         data = (ROOT / name).read_bytes()
-        if b"\0" in data:
+        if b"\0" in data:  # binary assets (images, archives) and UTF-16 text
             continue
         try:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             yield name, 0, "not UTF-8 text, so it cannot be checked"
             continue
-        flagged = None
+        lines = text.splitlines()
         if name.endswith(".json"):
-            flagged = [value for value in json_strings(strip_locales(json.loads(text))) if CJK.search(value)]
-        for number, line in enumerate(text.splitlines(), 1):
-            if CJK.search(line) and MARKER not in line and (flagged is None or any(value in line for value in flagged)):
+            yield from json_findings(name, lines, strip_locales(json.loads(text)))
+            continue
+        for number, line in enumerate(lines, 1):
+            if CJK.search(line) and MARKER not in line:
                 yield name, number, line.strip()
+
+
+def json_findings(name, lines, document):
+    for value in json_strings(document):
+        if not CJK.search(value):
+            continue
+        spellings = {json.dumps(value, ensure_ascii=False)[1:-1], json.dumps(value)[1:-1]}
+        numbers = [number for number, line in enumerate(lines, 1) if any(spelling in line for spelling in spellings)]
+        for number in numbers or [0]:
+            yield name, number, lines[number - 1].strip() if number else value
 
 
 def main():
