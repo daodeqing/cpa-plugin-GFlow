@@ -1,4 +1,4 @@
-"""传输前不得丢失浏览器合法的同名 Cookie。"""
+"""Preserve valid same-name browser Cookies before transport."""
 import sys
 import unittest
 from types import SimpleNamespace

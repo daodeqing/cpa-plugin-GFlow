@@ -1,4 +1,4 @@
-"""执行真实注入脚本，模拟启用 Trusted Types 的页面。"""
+"""Execute the actual injected script against a simulated page with Trusted Types enabled."""
 import ast
 import asyncio
 import json

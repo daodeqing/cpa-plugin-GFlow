@@ -1,4 +1,4 @@
-"""Cookie 作用域回归；只用合成值，不读取账号。"""
+"""Cookie scope regression tests using only synthetic values, without reading accounts."""
 import ast
 import json
 import sys
@@ -115,7 +115,7 @@ class PersonalPersistenceRegression(unittest.TestCase):
 
 class PersonalPersistenceLifecycleRegression(unittest.IsolatedAsyncioTestCase):
     async def test_browser_export_persist_reinject_and_http_header(self):
-        # 提取真实持久化方法，替换浏览器/数据库外设；不启动浏览器或读取账号。
+        # Extract the actual persistence method and replace browser/database dependencies; do not start a browser or read accounts.
         browser_source = ROOT/"python/flow2api/src/services/browser_captcha_personal.py"
         tree = ast.parse(browser_source.read_text(encoding="utf-8"))
         method = next(node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef)
@@ -144,7 +144,7 @@ class PersonalPersistenceLifecycleRegression(unittest.IsolatedAsyncioTestCase):
                 browser_cookie["value"] = "browser-refreshed"
             exported.append(browser_cookie)
 
-        # 模拟浏览器在原注入副本之外刷新了真实父域 NID/SIDCC。
+        # Simulate the browser refreshing actual parent-domain NID/SIDCC in addition to the original injected copies.
         exported.extend([
             {"name": "NID", "value": "browser-nid", "domain": ".google.com", "path": "/"},
             {"name": "SIDCC", "value": "browser-sidcc", "domain": ".google.com", "path": "/"},

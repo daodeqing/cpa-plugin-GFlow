@@ -12,7 +12,7 @@ import os
 import sys
 import traceback
 
-# 专用浏览器在后台运行，不打开空白的未登录窗口。
+# Run the dedicated browser in the background without opening a blank logged-out window.
 os.environ.setdefault("PERSONAL_BROWSER_HEADLESS", "1")
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 from pathlib import Path
@@ -48,19 +48,19 @@ if os.name == "nt":
 
 
 def get_gflow_model_catalog() -> List[Dict[str, Any]]:
-    """返回供 EasyCPA 与客户端模型选择器展示的核心模型列表（严格限制为 7 个）。
+    """Return the core model list for EasyCPA and client model selectors (strictly limited to 7).
 
-    包括 3 个核心图片模型与 4 个核心视频模型。
-    客户端选择这 7 个模型时，后台会根据比例/画质/时长自动调配底层笛卡尔积变体。
+    Includes 3 core image models and 4 core video models.
+    When a client selects one of these 7 models, the backend selects the underlying Cartesian-product variant by aspect ratio/quality/duration.
     """
     base_models = [
-        ("gflow-nano-banana-pro", "nano-banana-pro", "image", "Nano Banana Pro", "Google Flow 核心图片模型 - 支持 1:1, 16:9, 9:16, 4:3, 3:4 与 1K/2K/4K 自动调配"),
-        ("gflow-nano-banana-2-lite", "nano-banana-2-lite", "image", "Nano Banana 2 Lite", "Google Flow 核心图片模型 - 支持 1:1, 16:9, 9:16, 4:3, 3:4 与 1K/2K/4K 自动调配"),
-        ("gflow-nano-banana-2.1", "nano-banana-2.1", "image", "Nano Banana 2.1", "Google Flow 核心图片模型 - 支持 1:1, 16:9, 9:16, 4:3, 3:4 与 1K/2K/4K 自动调配"),
-        ("gflow-omni-1.1-flash", "omni-1.1-flash", "video", "Omni 1.1 Flash", "Google Flow 核心视频模型 - 支持 4s/6s/8s/10s 时长与横/竖屏自动调配"),
-        ("gflow-veo-3.1-lite", "veo-3.1-lite", "video", "Veo 3.1 - Lite", "Google Flow 核心视频模型 - 支持 4s/6s/8s 时长与横/竖屏自动调配"),
-        ("gflow-veo-3.1-fast", "veo-3.1-fast", "video", "Veo 3.1 - Fast", "Google Flow 核心视频模型 - 支持 4s/6s/8s 时长与横/竖屏自动调配"),
-        ("gflow-veo-3.1-quality", "veo-3.1-quality", "video", "Veo 3.1 - Quality", "Google Flow 核心视频模型 - 支持 4s/6s/8s 时长与横/竖屏自动调配"),
+        ("gflow-nano-banana-pro", "nano-banana-pro", "image", "Nano Banana Pro", "Google Flow core image model - automatic selection for 1:1, 16:9, 9:16, 4:3, 3:4 and 1K/2K/4K"),
+        ("gflow-nano-banana-2-lite", "nano-banana-2-lite", "image", "Nano Banana 2 Lite", "Google Flow core image model - automatic selection for 1:1, 16:9, 9:16, 4:3, 3:4 and 1K/2K/4K"),
+        ("gflow-nano-banana-2.1", "nano-banana-2.1", "image", "Nano Banana 2.1", "Google Flow core image model - automatic selection for 1:1, 16:9, 9:16, 4:3, 3:4 and 1K/2K/4K"),
+        ("gflow-omni-1.1-flash", "omni-1.1-flash", "video", "Omni 1.1 Flash", "Google Flow core video model - automatic selection for 4s/6s/8s/10s durations and landscape/portrait"),
+        ("gflow-veo-3.1-lite", "veo-3.1-lite", "video", "Veo 3.1 - Lite", "Google Flow core video model - automatic selection for 4s/6s/8s durations and landscape/portrait"),
+        ("gflow-veo-3.1-fast", "veo-3.1-fast", "video", "Veo 3.1 - Fast", "Google Flow core video model - automatic selection for 4s/6s/8s durations and landscape/portrait"),
+        ("gflow-veo-3.1-quality", "veo-3.1-quality", "video", "Veo 3.1 - Quality", "Google Flow core video model - automatic selection for 4s/6s/8s durations and landscape/portrait"),
     ]
     models = []
     for mid, orig_id, mtype, dname, desc in base_models:
@@ -124,7 +124,7 @@ class GFlowService:
             await self.db.check_and_migrate_db(raw_cfg)
 
         await self.db.reload_config_to_memory()
-        # 一次用户生成只尝试一次；防止失败重启浏览器并重复提交。
+        # Try each user generation once to prevent browser restarts and duplicate submissions after failure.
         config.set_flow_max_retries(1)
 
         self.proxy_manager = ProxyManager(self.db)
@@ -132,7 +132,7 @@ class GFlowService:
         class PluginFlowClient(BrowserDiagnosticFlowMixin, FlowClient):
             pass
         self.flow_client = PluginFlowClient(self.proxy_manager, self.db)
-        # 保留 flow2api 自身的分步骤超时；整项任务由 GenerationManager 截止和取消。
+        # Keep flow2api step timeouts; GenerationManager handles the overall task deadline and cancellation.
         from project_control import ProjectControl, PoolDatabase, BoundTokenManager, BoundLoadBalancer
         self.project_control = ProjectControl(self)
         await self.project_control.initialize()
@@ -243,7 +243,7 @@ class GFlowService:
 
         token_st = st
         if not token_st and not google_cookies:
-            raise ValueError("Cookie 或 st 不能为空")
+            raise ValueError("Cookie or st must not be empty")
 
         new_token = await self.token_manager.add_token(
             st=token_st,
@@ -279,7 +279,7 @@ class GFlowService:
             result = await sync_extension_account(self, params)
         except ExtensionSyncError as error:
             result = error.result()
-        # 留下可公开的最近诊断，便于定位用户重试；不保留请求或 Cookie。
+        # Keep the latest public diagnostics for user retries without retaining requests or Cookies.
         self.last_extension_sync = {
             "success": result.get("success", False),
             "error": result.get("error"),
@@ -290,7 +290,7 @@ class GFlowService:
         await self.initialize()
         tid = params.get("token_id")
         if not tid:
-            raise ValueError("token_id 必须指定")
+            raise ValueError("token_id is required")
         await self.token_manager.delete_token(int(tid))
         return {"success": True}
 
@@ -305,13 +305,13 @@ class GFlowService:
         return {"success": True, "token_id": tid, "is_active": enabled}
 
     async def handle_refresh_credits(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """手动查额仅调用原版额度接口；失败不伪装成零余额，也不启动登录浏览器。"""
+        """Manual credit checks use only the original credits API; failures neither appear as zero balances nor launch a login browser."""
         await self.initialize()
         tid = int(params.get("token_id", 0))
         token = await self.db.get_token(tid)
         if token is None:
             return {"success": False, "status_code": 404,
-                    "error": {"code": "gflow_account_not_found", "message": "GFlow 账号不存在"}}
+                    "error": {"code": "gflow_account_not_found", "message": "GFlow account does not exist"}}
         try:
             result = await self.flow_client.get_credits(
                 token.at, google_cookies=token.google_cookies, token_id=tid,
@@ -324,7 +324,7 @@ class GFlowService:
             if failure.code == "gflow_google_auth_rejected":
                 return {"success": False, "status_code": 401,
                         "error": {"code": "gflow_session_expired",
-                                  "message": "Google 未接受 GFlow 保存的登录态，请在已登录的 Flow 网页通过登录助手更新；历史余额保持不变。"}}
+                                  "message": "Google rejected the login session saved by GFlow. Update it through the login helper on a logged-in Flow page; the previous balance is unchanged."}}
             return failure.result()
         credits = int(result.get("credits", 0))
         await self.db.update_token(
@@ -394,8 +394,8 @@ class GFlowService:
             return error_completion(error, instance_id=getattr(getattr(self, "project_control", None), "instance_id", ""),
                                     workspace_id=request.get("workspaceId") if request else None)
         except Exception:
-            # 不把凭据、数据库路径或上游原始异常带入公开控制响应。
-            return error_completion(ProjectControlError("project_control_unavailable", "项目服务暂不可用，请检查插件日志", 503),
+            # Keep credentials, database paths, and raw upstream exceptions out of public control responses.
+            return error_completion(ProjectControlError("project_control_unavailable", "The project service is temporarily unavailable; check the plugin logs", 503),
                                     instance_id=getattr(getattr(self, "project_control", None), "instance_id", ""),
                                     workspace_id=request.get("workspaceId") if request else None)
 

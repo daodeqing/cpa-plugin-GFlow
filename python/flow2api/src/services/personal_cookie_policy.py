@@ -1,4 +1,4 @@
-"""保持 Cookie 的站点边界，兼容旧版三站复制的登录数据。"""
+"""Preserve Cookie site boundaries while supporting legacy login data copied to three sites."""
 import json
 from urllib.parse import urlparse
 
@@ -25,8 +25,8 @@ def scoped_personal_cookies(raw_cookie):
         key = (cookie["name"], cookie["value"], cookie.get("path", "/"))
         legacy = LEGACY_HOSTS.issubset(mirrors.get(key, set())) and not cookie.get("domain")
         if not structured or legacy:
-            # 旧版把整个 Flow 请求头复制到三个站点；OSID 等站点 Cookie
-            # 不能注入 accounts/www.google.com，否则会触发 CookieMismatch。
+            # Older versions copied the entire Flow request header to three sites; site Cookies such as OSID
+            # must not be injected into accounts/www.google.com, as this causes CookieMismatch.
             cookie.pop("url", None)
             cookie.pop("domain", None)
             cookie["path"] = "/"
@@ -58,11 +58,11 @@ def scoped_personal_cookies(raw_cookie):
 
 
 def merge_personal_cookie_payloads(base_cookie, browser_cookie_items):
-    """先恢复旧请求头的站点边界，再按浏览器真实作用域回填更新值。"""
+    """Restore legacy header site boundaries, then fill updated values using actual browser scopes."""
     from .browser_cookie_utils import merge_browser_cookie_payloads
 
-    # 原始 Cookie 头没有域信息；若直接交给通用合并器，会把所有登录
-    # Cookie 当作 Flow 主机副本，与浏览器导出的 .google.com 再存一份。
+    # Raw Cookie headers lack domains; passing them directly to the general merger treats all login
+    # Cookies as Flow host copies, duplicating the browser-exported .google.com entries.
     previous = scoped_personal_cookies(base_cookie)
     current = scoped_personal_cookies(browser_cookie_items)
     structured = isinstance(base_cookie, (dict, list)) or str(base_cookie or "").lstrip().startswith(("[", "{"))
@@ -81,9 +81,9 @@ def merge_personal_cookie_payloads(base_cookie, browser_cookie_items):
             domain = str(cookie.get("domain", "")).lstrip(".").lower()
             return flow_host(cookie) or bool(domain and "flow.google.com".endswith("." + domain))
 
-        # 只有本次仍保留原始头时，才能识别刚注入的无域 Flow 副本。
-        # 浏览器另有同名、同路径的真实站点条目时，用其作用域和值；
-        # 不对已有结构化数据推断来源，也不跨路径合并合法 Cookie。
+        # Only a retained raw header can identify newly injected domainless Flow copies.
+        # Use the scope and value of an actual browser site entry with the same name and path;
+        # do not infer origins for existing structured data or merge valid Cookies across paths.
         authoritative = {
             (cookie["name"], cookie.get("path", "/"))
             for cookie in current if not flow_host(cookie) and reaches_flow(cookie)
@@ -101,5 +101,5 @@ def merge_personal_cookie_payloads(base_cookie, browser_cookie_items):
     merged = merge_browser_cookie_payloads(previous, current)
     if not merged:
         return ""
-    # 清理同值的旧 Flow 登录镜像；不同主机、路径或值仍保留真实边界。
+    # Remove legacy Flow login copies with identical values; preserve actual boundaries for different hosts, paths, or values.
     return json.dumps(scoped_personal_cookies(merged), ensure_ascii=False, separators=(",", ":"))

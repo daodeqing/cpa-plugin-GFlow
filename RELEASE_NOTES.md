@@ -1,12 +1,12 @@
 # GFlow v0.1.20
 
-修正媒体回传与模型能力校验，并增加不含凭据的浏览器阶段诊断。
+Fixes media responses and model capability validation, and adds browser stage diagnostics without credentials.
 
-- 内联媒体按128MiB解码上限读取，包含文件读取期间增长的情况；减少大型媒体解析开销。
-- 视频参考图上限按实际模型和时长发布，不支持参考图的Quality 8秒请求明确拒绝，不再静默丢图。
-- 浏览器启动、页面加载或会话操作异常保留安全的阶段与原因分类；不记录Cookie、令牌、验证码参数或完整敏感异常，不改变验证流程与重试策略。
-- 保留0.1.19的宿主SSE格式、异步回传、固定账号及项目绑定。
+- Reads inline media within the 128 MiB decoded limit, including file growth during reading; reduces large-media parsing overhead.
+- Publishes reference image limits by actual video model and duration. Quality 8-second requests that do not support reference images explicitly reject them instead of silently dropping them.
+- Browser startup, page load, and session operation errors retain safe stage and reason classifications. No Cookies, tokens, captcha parameters, or complete sensitive exceptions are logged; verification flow and retry policy remain unchanged.
+- Preserves the 0.1.19 host SSE format, asynchronous responses, fixed accounts, and project binding.
 
-实机边界：CutFlow 0.6.5与GFlow 0.1.19已通过真实项目创建和旧图仅下载恢复；一次新图请求在109.1秒后返回Failed to obtain reCAPTCHA token，未获得作品。普通Chrome本地空白页启动检查通过，不能证明Google验证页面可用。新图片、连续改图仍待完成真实验收；本版不宣称已修复上游验证。
+Real-device limits: CutFlow 0.6.5 and GFlow 0.1.19 passed actual project creation and download-only recovery of existing images. One new-image request returned Failed to obtain reCAPTCHA token after 109.1 seconds and produced no output. A local blank-page startup check passed in ordinary Chrome, but does not prove Google verification pages work. New images and successive edits still require actual acceptance checks; this version does not claim to fix upstream verification.
 
-Windows下载gflow_0.1.20_windows_amd64.zip，解压得到gflow.dll。退出EasyCLIProxyAPI代理后替换插件，保留gflow-data，再打开代理。CutFlow建议配套0.6.6。不要删除账号、项目或旧作品来重试。
+On Windows, download gflow_0.1.20_windows_amd64.zip and extract gflow.dll. Exit the EasyCLIProxyAPI proxy, replace the plugin, preserve gflow-data, then reopen the proxy. CutFlow 0.6.6 is recommended. Do not delete accounts, projects, or existing outputs to retry.

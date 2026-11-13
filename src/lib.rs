@@ -175,17 +175,30 @@ fn handle_method(method: &str, req_bytes: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
+const SCHEMA_VERSION_MIN: u64 = 6;
+const SCHEMA_VERSION_MAX: u64 = 10;
+
+// The host refuses a plugin schema newer than its own, so answer with the host's
+// version capped to what GFlow implements. Below 6 the host would HTML-escape
+// management JSON, so older or silent hosts keep the original declaration.
+fn negotiated_schema_version(req: &[u8]) -> u64 {
+    serde_json::from_slice::<serde_json::Value>(req).ok()
+        .and_then(|value| value.get("schema_version")?.as_u64())
+        .unwrap_or(SCHEMA_VERSION_MIN)
+        .clamp(SCHEMA_VERSION_MIN, SCHEMA_VERSION_MAX)
+}
+
 fn handle_register(req: &[u8]) -> Result<Vec<u8>, String> {
     apply_plugin_config(req)?;
     let reg = serde_json::json!({
         "ok": true,
         "result": {
-            "schema_version": 6,
+            "schema_version": negotiated_schema_version(req),
             "metadata": {
                 "Name": "GFlow",
                 "Version": env!("CARGO_PKG_VERSION"),
                 "Author": "daodeqing",
-                "Description": "Google Flow 图片/视频生成、固定项目绑定与多账号池管理插件",
+                "Description": "Google Flow image and video generation, fixed project binding, and multi-account pool management",
                 "GitHubRepository": "https://github.com/daodeqing/cpa-plugin-GFlow",
                 "Logo": "https://raw.githubusercontent.com/daodeqing/cpa-plugin-GFlow/main/assets/logo.png",
                 "Homepage": "https://github.com/daodeqing/cpa-plugin-GFlow",
@@ -196,7 +209,7 @@ fn handle_register(req: &[u8]) -> Result<Vec<u8>, String> {
                         "Name": "data_dir",
                         "Type": "string",
                         "Default": "",
-                        "Description": "数据目录（留空使用插件动态库旁的 gflow-data；内含账号数据库、日志和独立后台运行时）"
+                        "Description": "Data directory. Leave empty to use gflow-data next to the plugin library; it holds the account database, logs, and the standalone worker runtime."
                     }
                 ]
             },
@@ -338,7 +351,7 @@ fn project_control_model() -> serde_json::Value {
     })
 }
 
-// 宿主格式适配可能只保留标准字段，项目绑定必须从原请求完整保留。
+// Host format adaptation may keep only standard fields, so the project binding must be taken whole from the original request.
 fn executor_body(request: &serde_json::Value) -> Result<serde_json::Value, String> {
     use base64::Engine;
     let decode = |field: &str| -> serde_json::Value {
@@ -545,11 +558,11 @@ fn handle_management_register() -> Result<Vec<u8>, String> {
                 {
                     "Path": "/manage",
                     "Menu": "GFlow",
-                    "Description": "GFlow 账号与模型管理控制台"
+                    "Description": "GFlow account and model management console"
                 },
                 {
                     "Path": "/extension.zip",
-                    "Description": "下载 GFlow 登录助手"
+                    "Description": "Download the GFlow login helper"
                 }
             ],
             "Routes": [
@@ -712,7 +725,7 @@ fn handle_management_handle(req: &[u8]) -> Result<Vec<u8>, String> {
 
     match result {
         Ok(mut data) => {
-            // 同步的业务失败保留分类与 HTTP 状态，不再统一包装成 500 或假成功。
+            // Sync business failures keep their classification and HTTP status instead of being wrapped as a 500 or a false success.
             let status_code = data.get("status_code").and_then(|v| v.as_u64())
                 .filter(|status| (400..600).contains(status)).unwrap_or(200);
             if let Some(object) = data.as_object_mut() { object.remove("status_code"); }
@@ -791,6 +804,26 @@ mod cached_media_regressions {
     }
 }
 
+
+#[cfg(test)]
+mod schema_negotiation {
+    use super::*;
+
+    fn declared(request: &[u8]) -> serde_json::Value {
+        let response: serde_json::Value = serde_json::from_slice(&handle_register(request).unwrap()).unwrap();
+        response["result"]["schema_version"].clone()
+    }
+
+    #[test]
+    fn declares_the_hosts_schema_within_the_supported_range() {
+        assert_eq!(declared(br#"{"schema_version":10}"#), 10);
+        assert_eq!(declared(br#"{"schema_version":8}"#), 8);
+        assert_eq!(declared(br#"{"schema_version":11}"#), 10);
+        assert_eq!(declared(br#"{"schema_version":3}"#), 6);
+        assert_eq!(declared(br#"{}"#), 6);
+        assert_eq!(declared(b"not json"), 6);
+    }
+}
 
 #[cfg(test)]
 mod project_control_contract {

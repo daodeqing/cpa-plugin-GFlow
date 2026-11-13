@@ -1,4 +1,4 @@
-"""GFlow 模型名适配；网络和生成调用使用未修改的 flow2api 源码。"""
+"""GFlow model name adapter; network and generation calls use unmodified flow2api sources."""
 import re
 from typing import Any, Dict, Optional, Tuple
 from src.core.model_resolver import (
@@ -25,7 +25,7 @@ def _normalize_duration(value: Any) -> Optional[int]:
             .replace("second", "")
             .replace("sec", "")
             .replace("s", "")
-            .replace("秒", "")
+            .replace("秒", "")  # zh-compat: legacy duration input in seconds
             .strip()
         )
         try:
@@ -36,7 +36,7 @@ def _normalize_duration(value: Any) -> Optional[int]:
     return None
 
 def _extract_video_params(request) -> Tuple[Optional[str], Optional[int]]:
-    """从请求中提取视频 aspectRatio 和 duration 参数。"""
+    """Extract video aspectRatio and duration parameters from the request."""
     aspect_ratio: Optional[str] = None
     duration: Optional[int] = None
 
@@ -62,7 +62,7 @@ def _extract_video_params(request) -> Tuple[Optional[str], Optional[int]]:
                 return extra[k]
         return None
 
-    # 1. 直接从 request 顶层读取
+    # 1. Read directly from the request top level
     duration = _normalize_duration(
         _read_val(request, "duration", "durationSeconds", "duration_seconds", "seconds")
     )
@@ -70,7 +70,7 @@ def _extract_video_params(request) -> Tuple[Optional[str], Optional[int]]:
         request, "aspectRatio", "aspect_ratio", "orientation", "aspect"
     )
 
-    # 2. 从 generationConfig 读取
+    # 2. Read from generationConfig
     gen_config = getattr(request, "generationConfig", None)
     if gen_config is not None:
         if duration is None:
@@ -88,7 +88,7 @@ def _extract_video_params(request) -> Tuple[Optional[str], Optional[int]]:
         if aspect_raw is None:
             aspect_raw = _read_val(gen_config, "aspectRatio", "aspect_ratio", "orientation", "aspect")
 
-    # 3. 从 extra 或 extra_body 读取
+    # 3. Read from extra or extra_body
     extra = getattr(request, "__pydantic_extra__", None) or {}
     if duration is None:
         duration = _normalize_duration(
@@ -118,7 +118,7 @@ def _extract_video_params(request) -> Tuple[Optional[str], Optional[int]]:
         if aspect_raw is None:
             aspect_raw = _read_val(eb_gen, "aspectRatio", "aspect_ratio", "orientation", "aspect")
 
-    # 4. 从 OpenAI size 尺寸推断视频方向
+    # 4. Infer video orientation from OpenAI size
     if aspect_raw is None:
         sz = _read_val(request, "size") or _read_val(extra, "size")
         if isinstance(sz, str):
@@ -127,7 +127,7 @@ def _extract_video_params(request) -> Tuple[Optional[str], Optional[int]]:
                 w, h = int(m.group("w")), int(m.group("h"))
                 aspect_raw = "portrait" if h > w else "landscape"
 
-    # 归一化 aspect_ratio
+    # Normalize aspect_ratio
     if aspect_raw:
         ar_str = str(aspect_raw).lower().strip()
         if ar_str in ("9:16", "9-16", "portrait"):
@@ -144,7 +144,7 @@ def _extract_video_params(request) -> Tuple[Optional[str], Optional[int]]:
     return aspect_ratio, duration
 
 def normalize_model_alias(m: str) -> str:
-    """统一模型前缀与比例后缀，例如 gflow-nano-banana-* -> gemini-*，-16-9 -> -landscape。"""
+    """Normalize model prefixes and aspect ratio suffixes, e.g. gflow-nano-banana-* -> gemini-*, -16-9 -> -landscape."""
     if m.startswith("gflow-"):
         m = m[len("gflow-"):]
     prefixes = [
@@ -177,7 +177,7 @@ def normalize_model_alias(m: str) -> str:
     return m
 
 def resolve_model_name(model: str, request=None, model_config=None, images=None) -> str:
-    """先转换插件别名；图片和标准模型交由原版解析，保留视频秒数/参考图映射。"""
+    """Convert plugin aliases first; let the original resolver handle image and standard models, preserving video duration/reference image mappings."""
     model = normalize_model_alias(model)
     if model in VIDEO_MODERN_BASES:
         aspect_ratio, duration = (
@@ -211,13 +211,13 @@ def resolve_model_name(model: str, request=None, model_config=None, images=None)
 
         if model_config and resolved in model_config:
             debug_logger.log_info(
-                f"[MODEL_RESOLVER] 视频模型自动调配: {model} -> {resolved} "
+                f"[MODEL_RESOLVER] Automatic video model selection: {model} -> {resolved} "
                 f"(duration={duration}s, aspect={aspect_ratio}, has_images={has_images})"
             )
             return resolved
 
         debug_logger.log_warning(
-            f"[MODEL_RESOLVER] 视频模型 {model} 调配失败 (target={resolved})，使用原始模型名"
+            f"[MODEL_RESOLVER] Video model {model} selection failed (target={resolved}), using the original model name"
         )
         return model
     return _resolve_upstream_model(
