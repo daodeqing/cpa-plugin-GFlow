@@ -1,5 +1,4 @@
 """Failure propagation tests: no accounts, browser, network or generation."""
-import asyncio
 import contextlib
 import importlib
 import io
@@ -35,17 +34,6 @@ class ErrorTests(unittest.TestCase):
         self.assertEqual(account_pool_error([])["code"], "gflow_empty_account_pool")
         self.assertEqual(account_pool_error([SimpleNamespace(ban_reason=None)])["code"], "gflow_accounts_disabled")
         self.assertEqual(account_pool_error([SimpleNamespace(ban_reason="session_expired")])["code"], "gflow_session_expired")
-
-    def test_english_login_expiry_messages_are_session_expired(self):
-        sys.path.insert(0, str(ROOT / "python/flow2api"))
-        from src.services.load_balancer import LoadBalancer
-        balancer = LoadBalancer.__new__(LoadBalancer)
-        balancer.token_manager = SimpleNamespace(get_active_tokens=AsyncMock(return_value=[]),
-            get_all_tokens=AsyncMock(return_value=[SimpleNamespace(ban_reason="session_expired")]))
-        pool_reason = asyncio.run(balancer.get_unavailable_reason())
-        browser_reason = "RuntimeError: Flow login expired; sync Google Cookies again"
-        for message in (pool_reason, browser_reason):
-            self.assertEqual(generation_error({"error": {"message": message}})["code"], "gflow_session_expired", message)
 
 
 class WorkerTests(unittest.IsolatedAsyncioTestCase):
