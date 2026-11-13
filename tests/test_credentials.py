@@ -1,4 +1,4 @@
-"""只使用虚构 Cookie，禁止网络调用。"""
+"""Use only fake Cookies; network calls are prohibited."""
 import sys
 from pathlib import Path
 import unittest

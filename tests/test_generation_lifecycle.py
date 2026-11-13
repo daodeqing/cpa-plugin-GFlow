@@ -1,4 +1,4 @@
-"""本地假任务测试，无模型调用、无真实浏览器。"""
+"""Local fake-task tests without model calls or real browsers."""
 import asyncio
 import importlib.util
 import json

@@ -1,7 +1,7 @@
 {
   "id": "gflow",
-  "name": "GFlow (Google Flow & Veo 模型接入)",
-  "description": "Google Flow 图片与视频生成、CutFlow 固定项目与账号绑定、普通 API Key 项目控制及账号池管理。 / Google Flow media generation with fixed CutFlow projects and account pool management.",
+  "name": "GFlow (Google Flow and Veo models)",
+  "description": "Google Flow image and video generation, fixed CutFlow projects with account binding, project control for ordinary API keys, and account pool management.",
   "author": "daodeqing",
   "repository": "https://github.com/daodeqing/cpa-plugin-GFlow",
   "homepage": "https://github.com/daodeqing/cpa-plugin-GFlow",
@@ -13,5 +13,11 @@
     "Google Flow",
     "Veo",
     "Nano Banana"
-  ]
+  ],
+  "locales": {
+    "zh-CN": {
+      "name": "GFlow (Google Flow & Veo 模型接入)",
+      "description": "Google Flow 图片与视频生成、CutFlow 固定项目与账号绑定、普通 API Key 项目控制及账号池管理。"
+    }
+  }
 }

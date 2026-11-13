@@ -1,4 +1,4 @@
-"""验证扩展到真实账号管理器/SQLite 的链路；上游请求全部使用模拟对象。"""
+"""Verify the path from the extension to the actual account manager/SQLite; mock all upstream requests."""
 import sys
 import uuid
 from pathlib import Path
@@ -29,7 +29,7 @@ class ExtensionPipelineTest(IsolatedAsyncioTestCase):
                 "credits": 12,
                 "user": {"email": "example@example.test"},
             }),
-            get_credits=AsyncMock(side_effect=AssertionError("验证已包含额度，不应重复查询")),
+            get_credits=AsyncMock(side_effect=AssertionError("Verification already includes credits; do not query again")),
             create_project=AsyncMock(return_value="11111111-1111-1111-1111-111111111111"),
         )
         self.manager = TokenManager(self.db, self.client)
