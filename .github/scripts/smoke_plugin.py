@@ -10,6 +10,8 @@ import sys
 import time
 import tomllib
 
+from check_english import CJK
+
 
 class Buffer(ctypes.Structure):
     _fields_ = [("ptr", ctypes.c_void_p), ("len", ctypes.c_size_t)]
@@ -51,13 +53,19 @@ def probe(library, expected_version):
     try:
         registration = rpc("plugin.register", {})
         assert registration["metadata"]["Version"] == expected_version
+        assert registration["schema_version"] == 6, registration["schema_version"]
+        assert not CJK.search(json.dumps(registration, ensure_ascii=False)), registration["metadata"]
+        assert rpc("plugin.register", {"schema_version": 10})["schema_version"] == 10
+        assert rpc("plugin.register", {"schema_version": 8})["schema_version"] == 8
         routes = rpc("management.register", {})
         assert {item["Path"] for item in routes["Resources"]} == {"/manage", "/extension.zip"}
+        assert not CJK.search(json.dumps(routes, ensure_ascii=False)), routes["Resources"]
         for path in ["bootstrap", "tmp", "api/status"]:
             status, _ = request("/v0/resource/plugins/gflow/" + path)
             assert status == 404
         status, html = request("/v0/resource/plugins/gflow/manage")
         assert status == 200 and b"cli-proxy-auth" in html
+        assert not CJK.search(html.decode("utf-8")), "management console still contains Chinese text"
         status, response = request("/v0/management/plugins/gflow/api/status")
         assert status == 200, response.decode("utf-8", errors="replace")
         status_data = json.loads(response)
@@ -68,7 +76,7 @@ def probe(library, expected_version):
         assert runtime.is_file() and runtime.parents[2].samefile(data_directory), str(runtime)
         status, response = request("/v0/management/plugins/gflow/api/models")
         assert status == 200 and len(json.loads(response)["models"]) == 7
-        # 在干净无账号安装中验证项目控制模型，绝不创建云端项目或生成媒体。
+        # Verify the project control model on a clean install without accounts; never create cloud projects or generate media.
         catalog = rpc("model.static", {})["Models"]
         assert any(item["ID"] == "gflow-project-control" for item in catalog)
         workspace = "11111111-1111-4111-8111-111111111111"

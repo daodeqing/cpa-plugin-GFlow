@@ -1,4 +1,4 @@
-"""使用空账号、随机密钥和隔离目录验证真实 CPA 的免费项目控制路由。"""
+"""Verify the free project control route on a real CPA host with no accounts, a random key, and an isolated directory."""
 import argparse
 import hashlib
 import json
@@ -42,7 +42,7 @@ def run(host, archive, stage, report_path):
     root = Path(__file__).resolve().parents[2]
     stage = stage.resolve()
     if not stage.is_relative_to(root) or stage.exists():
-        raise ValueError("验收目录必须是当前插件项目内的全新目录")
+        raise ValueError("The acceptance directory must be a new directory inside this plugin checkout")
     stage.mkdir(parents=True)
     host_copy = stage / "cli-proxy-api.exe"
     shutil.copy2(host, host_copy)
@@ -50,11 +50,11 @@ def run(host, archive, stage, report_path):
     plugin_dir.mkdir(parents=True)
     with zipfile.ZipFile(archive) as bundle:
         if bundle.namelist() != ["gflow.dll"]:
-            raise ValueError("插件包必须只包含 gflow.dll")
+            raise ValueError("The plugin archive must contain only gflow.dll")
         (plugin_dir / "gflow.dll").write_bytes(bundle.read("gflow.dll"))
     auths = stage / "auths"
     auths.mkdir()
-    # 仅供宿主选择插件执行器的虚构凭据，不含 Google 或平台登录态。
+    # Synthetic credential that only lets the host pick the plugin executor; it holds no Google or platform login session.
     (auths / "gflow-synthetic.json").write_text(json.dumps({
         "type":"gflow", "provider":"gflow", "email":"synthetic@example.invalid",
         "disabled":False, "access_token":"synthetic-routing-only",
@@ -129,7 +129,7 @@ observability:
             catalog = None
             while time.monotonic() < deadline:
                 if process.poll() is not None:
-                    raise RuntimeError("隔离 CPA 提前退出；见本项目 host.log")
+                    raise RuntimeError("The isolated CPA exited early; see host.log in the stage directory")
                 try:
                     status,catalog = http_json(base,"/v1/models",api_key,timeout=3)
                     if status == 200 and any(item.get("id") == "gflow-project-control" for item in catalog.get("data",[])):
@@ -138,10 +138,10 @@ observability:
                     pass
                 time.sleep(.3)
             if not catalog:
-                raise RuntimeError("隔离 CPA 未就绪")
+                raise RuntimeError("The isolated CPA never became ready")
             models = [item["id"] for item in catalog.get("data",[])]
             summary["models"] = [model for model in models if model.startswith("gflow-")]
-            assert "gflow-project-control" in models, "宿主未注册项目控制模型"
+            assert "gflow-project-control" in models, "The host did not register the project control model"
             summary["checks"]["control_model_registered"] = "passed"
             status,_ = http_json(base,"/v1/models","invalid-smoke-key")
             assert status == 401, ("unauthorized models status",status)
@@ -183,8 +183,8 @@ observability:
                 assert response.status == 200
                 text = response.read().decode("utf-8")
             summary["streamBodyBytes"] = len(text.encode("utf-8"))
-            assert text.count("data: [DONE]") == 1, "宿主应只输出一个流结束标记"
-            assert "data: data:" not in text, "SSE 被重复封装"
+            assert text.count("data: [DONE]") == 1, "The host must emit exactly one end-of-stream marker"
+            assert "data: data:" not in text, "SSE frames were wrapped twice"
             content = []
             finished = False
             for line in text.splitlines():
@@ -233,7 +233,7 @@ observability:
                     pass
             summary["hostStopped"] = process.poll() is not None
         summary["existingServicesUnchanged"] = all(psutil.pid_exists(pid) and psutil.Process(pid).create_time()==started for pid,started in protected.items())
-        # 所有密钥均留在隔离临时目录；报告不含配置或密钥。
+        # Every key stays in the isolated temporary directory; the report holds no configuration or keys.
         summary["protectedProcessIds"] = list(protected)
         summary["passed"] = len(summary["checks"])==7 and summary.get("hostStopped",False) and summary["existingServicesUnchanged"]
         report_path.parent.mkdir(parents=True,exist_ok=True)
